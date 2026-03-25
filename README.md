@@ -69,4 +69,4 @@ Since this is AGPL-3.0, if you deploy a modified version as a web app, you must 
 
 - Original project by [asrajavel](https://github.com/asrajavel/portfolio-simulator)
 - Design inspired by [Oat](https://github.com/knadh/oat) by Kailash Nadh (Zerodha CTO)
-- Built with help from Claude (Anthropic)
+
