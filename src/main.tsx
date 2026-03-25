@@ -60,7 +60,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BaseProvider theme={premiumTheme}>
       <React.StrictMode>
         <BrowserRouter 
-          basename="/portfolio-simulator"
+          basename="/"
           future={{
             v7_startTransition: true,
             v7_relativeSplatPath: true,
