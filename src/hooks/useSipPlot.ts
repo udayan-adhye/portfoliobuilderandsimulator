@@ -1,0 +1,234 @@
+import { useCallback } from 'react';
+import { fillMissingNavDates } from '../utils/data/fillMissingNavDates';
+import { indexService } from '../services/indexService';
+import { yahooFinanceService } from '../services/yahooFinanceService';
+import { fixedReturnService } from '../services/fixedReturnService';
+import { inflationService } from '../services/inflationService';
+import { govSchemeService } from '../services/govSchemeService';
+import { trackSimulation } from '../utils/analytics';
+import { warnInsufficientData } from '../utils/warnInsufficientData';
+
+const xirrCache = new Map<string, any[]>();
+
+function portfolioCacheKey(portfolio: any, years: number, amount: number): string {
+  return JSON.stringify({
+    assets: (portfolio.selectedAssets || []).filter(Boolean).map((a: any) => ({ id: a.id, type: a.type })),
+    allocations: portfolio.allocations,
+    rebalancingEnabled: portfolio.rebalancingEnabled,
+    rebalancingThreshold: portfolio.rebalancingThreshold,
+    stepUpEnabled: portfolio.stepUpEnabled,
+    stepUpPercentage: portfolio.stepUpPercentage,
+    years,
+    amount,
+  });
+}
+
+export function useSipPlot({
+  sipPortfolios,
+  years,
+  loadNavData,
+  plotState,
+  sipAmount,
+  chartView,
+}) {
+  const handlePlotAllPortfolios = useCallback(async () => {
+    trackSimulation('SIP', 'Plot');
+    plotState.setLoadingNav(true);
+    plotState.setLoadingXirr(false);
+    plotState.setHasPlotted(false);
+    plotState.setNavDatas({});
+    plotState.setLumpSumXirrDatas({});
+    plotState.setSipXirrDatas({});
+    plotState.setXirrError(null);
+    try {
+      const allNavDatas: Record<string, any[][]> = {};
+      const allNavsFlat: Record<string, any[]> = {};
+      const baseSipAmount = chartView === 'corpus' ? sipAmount : 100;
+
+      for (let pIdx = 0; pIdx < sipPortfolios.length; ++pIdx) {
+        const navs: any[][] = [];
+        
+        if (sipPortfolios[pIdx].selectedAssets && sipPortfolios[pIdx].selectedAssets.length > 0) {
+          for (const asset of sipPortfolios[pIdx].selectedAssets.filter(Boolean)) {
+            try {
+              let nav: any[] = [];
+              let identifier: string = '';
+              
+              if (asset.type === 'mutual_fund') {
+                nav = await loadNavData(asset.schemeCode);
+                identifier = `${pIdx}_${asset.schemeCode}`;
+              } else if (asset.type === 'index_fund') {
+                try {
+                  const indexData = await indexService.fetchIndexData(asset.indexName);
+                  
+                  if (!indexData || indexData.length === 0) {
+                    continue;
+                  }
+                  
+                  nav = indexData.map(item => ({
+                    date: item.date,
+                    nav: item.nav
+                  }));
+                  identifier = `${pIdx}_${asset.indexName}`;
+                } catch (indexError) {
+                  console.error(`Failed to fetch index data for ${asset.indexName}:`, indexError);
+                  continue;
+                }
+              } else if (asset.type === 'yahoo_finance') {
+                const stockData = await yahooFinanceService.fetchStockData(asset.symbol);
+                
+                if (!stockData || stockData.length === 0) {
+                  continue;
+                }
+                
+                nav = stockData.map(item => ({
+                  date: item.date,
+                  nav: item.nav
+                }));
+                identifier = `${pIdx}_${asset.symbol}`;
+              } else if (asset.type === 'fixed_return') {
+                try {
+                  const fixedReturnData = fixedReturnService.generateFixedReturnData(
+                    asset.annualReturnPercentage,
+                    1990
+                  );
+                  
+                  if (!fixedReturnData || fixedReturnData.length === 0) {
+                    continue;
+                  }
+                  
+                  nav = fixedReturnData;
+                  identifier = `${pIdx}_fixed_${asset.annualReturnPercentage}`;
+                } catch (fixedReturnError) {
+                  console.error(`Failed to generate fixed return data for ${asset.annualReturnPercentage}%:`, fixedReturnError);
+                  continue;
+                }
+              } else if (asset.type === 'inflation') {
+                try {
+                  const inflationData = await inflationService.generateInflationNavData(
+                    asset.countryCode,
+                    1960
+                  );
+                  
+                  if (!inflationData || inflationData.length === 0) {
+                    continue;
+                  }
+                  
+                  nav = inflationData;
+                  identifier = `${pIdx}_inflation_${asset.countryCode}`;
+                } catch (inflationError) {
+                  console.error(`Failed to generate inflation data for ${asset.countryCode}:`, inflationError);
+                  continue;
+                }
+              } else if (asset.type === 'gov_scheme') {
+                try {
+                  const govData = govSchemeService.generateGovSchemeData(asset.scheme);
+                  if (!govData || govData.length === 0) {
+                    continue;
+                  }
+                  nav = govData;
+                  identifier = `${pIdx}_gov_${asset.scheme}`;
+                } catch (govError) {
+                  console.error(`Failed to generate gov scheme data for ${asset.scheme}:`, govError);
+                  continue;
+                }
+              }
+              
+              if (!Array.isArray(nav) || nav.length === 0) {
+                continue;
+              }
+              
+              const filled = fillMissingNavDates(nav);
+              navs.push(filled);
+              allNavsFlat[identifier] = filled;
+            } catch (error) {
+              console.error(`Error fetching data for asset ${asset.name}:`, error);
+              throw error;
+            }
+          }
+        }
+        allNavDatas[pIdx] = navs;
+      }
+      plotState.setNavDatas(allNavsFlat);
+
+      plotState.setLoadingXirr(true);
+      const allSipXirrDatas: Record<string, any[]> = {};
+      
+      const workerPromises = sipPortfolios.map((_, pIdx) => {
+        const navDataList = allNavDatas[pIdx];
+        const allocations = sipPortfolios[pIdx].allocations;
+        const rebalancingEnabled = sipPortfolios[pIdx].rebalancingEnabled;
+        const rebalancingThreshold = sipPortfolios[pIdx].rebalancingThreshold;
+        const stepUpEnabled = sipPortfolios[pIdx].stepUpEnabled;
+        const stepUpPercentage = sipPortfolios[pIdx].stepUpPercentage;
+        const cacheKey = portfolioCacheKey(sipPortfolios[pIdx], years, baseSipAmount);
+        
+        if (!navDataList || navDataList.length === 0) {
+          allSipXirrDatas[`Portfolio ${pIdx + 1}`] = [];
+          return Promise.resolve();
+        }
+        
+        const cached = xirrCache.get(cacheKey);
+        if (cached) {
+          console.log(`[SIP] Portfolio ${pIdx + 1}: cache hit (${cached.length} data points)`);
+          allSipXirrDatas[`Portfolio ${pIdx + 1}`] = cached;
+          return Promise.resolve();
+        }
+        
+        const hasSmoothAsset = sipPortfolios[pIdx].selectedAssets.some(
+          asset => asset?.type === 'inflation'
+        );
+        
+        const portfolioStartTime = performance.now();
+        
+        return new Promise<void>((resolve) => {
+          const worker = new Worker(new URL('../utils/calculations/sipRollingXirr/worker.ts', import.meta.url));
+          worker.postMessage({ navDataList, years, allocations, rebalancingEnabled, rebalancingThreshold, includeNilTransactions: false, stepUpEnabled, stepUpPercentage, sipAmount: baseSipAmount });
+          worker.onmessage = (event: MessageEvent) => {
+            const portfolioEndTime = performance.now();
+            let resultData = event.data;
+            
+            if (hasSmoothAsset && Array.isArray(resultData)) {
+              resultData = resultData.map((entry: any) => {
+                const { volatility, ...rest } = entry;
+                return rest;
+              });
+            }
+            
+            console.log(`[SIP] Portfolio ${pIdx + 1} total: ${((portfolioEndTime - portfolioStartTime) / 1000).toFixed(2)}s (${resultData.length} data points)`);
+            
+            xirrCache.set(cacheKey, resultData);
+            allSipXirrDatas[`Portfolio ${pIdx + 1}`] = resultData;
+            worker.terminate();
+            resolve();
+          };
+          worker.onerror = (err: ErrorEvent) => {
+            allSipXirrDatas[`Portfolio ${pIdx + 1}`] = [];
+            worker.terminate();
+            resolve();
+          };
+        });
+      });
+      
+      await Promise.all(workerPromises);
+      
+      warnInsufficientData(sipPortfolios, allNavDatas, allSipXirrDatas, years);
+      
+      plotState.setSipXirrDatas(allSipXirrDatas);
+      plotState.setHasPlotted(true);
+      plotState.setLoadingNav(false);
+      plotState.setLoadingXirr(false);
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      if (!(e instanceof Error && errorMsg.includes('Yahoo Finance ticker'))) {
+        plotState.setXirrError('Error loading or calculating data: ' + errorMsg);
+      }
+      console.error('Error loading or calculating data:', e);
+      plotState.setLoadingNav(false);
+      plotState.setLoadingXirr(false);
+    }
+  }, [sipPortfolios, years, loadNavData, plotState, sipAmount, chartView]);
+
+  return { handlePlotAllPortfolios };
+}
+

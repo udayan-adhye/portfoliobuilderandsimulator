@@ -1,0 +1,88 @@
+import React from 'react';
+import { MultiAssetCharts } from '../charts/MultiAssetCharts';
+import { SipPortfolio } from '../../types/sipPortfolio';
+import { LumpsumPortfolio } from '../../types/lumpsumPortfolio';
+import { Block } from 'baseui/block';
+import { LabelMedium } from 'baseui/typography';
+
+interface ChartAreaProps {
+  xirrError: string | null;
+  hasPlotted: boolean;
+  navDatas: Record<number, any[]>;
+  lumpsumPortfolioXirrData?: Record<string, any[]>;
+  sipPortfolioXirrData?: Record<string, any[]>;
+  COLORS: string[];
+  loadingNav?: boolean;
+  loadingXirr?: boolean;
+  sipPortfolios?: SipPortfolio[];
+  lumpsumPortfolios?: LumpsumPortfolio[];
+  years: number;
+  amount: number;
+  chartView: 'xirr' | 'corpus';
+  isLumpsum: boolean;
+  inflationAdjusted?: boolean;
+  inflationRates?: Map<number, number>;
+}
+
+export const ChartArea: React.FC<ChartAreaProps> = ({
+  xirrError,
+  hasPlotted,
+  navDatas,
+  lumpsumPortfolioXirrData,
+  sipPortfolioXirrData,
+  COLORS,
+  loadingNav = false,
+  loadingXirr = false,
+  sipPortfolios,
+  lumpsumPortfolios,
+  years,
+  amount,
+  chartView,
+  isLumpsum,
+  inflationAdjusted = false,
+  inflationRates,
+}) => (
+  <>
+    {xirrError && (
+      <Block marginTop="1rem">
+        <LabelMedium
+          overrides={{
+            Block: {
+              style: {
+                color: '#dc2626',
+                marginTop: 0,
+                marginRight: 0,
+                marginBottom: 0,
+                marginLeft: 0,
+              }
+            }
+          }}
+        >
+          {xirrError}
+        </LabelMedium>
+      </Block>
+    )}
+    <Block 
+      position="relative" 
+      maxWidth="90%"
+      margin="0 auto"
+    >
+      {hasPlotted && Object.keys(navDatas).length > 0 && (
+        <MultiAssetCharts
+          navDatas={navDatas}
+          lumpsumPortfolioXirrData={lumpsumPortfolioXirrData}
+          sipPortfolioXirrData={sipPortfolioXirrData}
+          COLORS={COLORS}
+          sipPortfolios={sipPortfolios}
+          lumpsumPortfolios={lumpsumPortfolios}
+          years={years}
+          amount={amount}
+          chartView={chartView}
+          isLumpsum={isLumpsum}
+          inflationAdjusted={inflationAdjusted}
+          inflationRates={inflationRates}
+        />
+      )}
+    </Block>
+  </>
+); 

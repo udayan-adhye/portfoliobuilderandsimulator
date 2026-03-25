@@ -1,0 +1,50 @@
+import { CHART_STYLES } from '../constants';
+
+/**
+ * Shared stock chart configurations for consistent styling across all charts
+ */
+
+export const STOCK_CHART_NAVIGATOR = {
+  enabled: true,
+  height: 40,
+  margin: 10,
+  maskFill: 'rgba(113, 113, 122, 0.1)',
+  outlineColor: CHART_STYLES.colors.line,
+  outlineWidth: 1,
+  handles: {
+    backgroundColor: CHART_STYLES.colors.background,
+    borderColor: '#d4d4d8'
+  },
+  xAxis: {
+    gridLineColor: CHART_STYLES.colors.gridLine,
+    labels: { style: { color: '#71717a', fontSize: '11px' } }
+  },
+  series: { lineColor: '#71717a', fillOpacity: 0.05 }
+} as const;
+
+export const STOCK_CHART_SCROLLBAR = {
+  enabled: true,
+  barBackgroundColor: CHART_STYLES.colors.gridLine,
+  barBorderColor: CHART_STYLES.colors.line,
+  buttonBackgroundColor: CHART_STYLES.colors.background,
+  buttonBorderColor: '#d4d4d8',
+  rifleColor: '#71717a',
+  trackBackgroundColor: '#fafafa',
+  trackBorderColor: CHART_STYLES.colors.line
+} as const;
+
+/**
+ * Format date to YYYY-MM-DD
+ */
+export const formatDate = (date: Date): string => date.toISOString().slice(0, 10);
+
+/**
+ * Get all unique dates from SIP XIRR data, sorted
+ */
+export const getAllDates = (sipPortfolioXirrData: Record<string, any[]>): string[] => {
+  const allDates = Object.values(sipPortfolioXirrData).flatMap(arr =>
+    Array.isArray(arr) ? arr.map(row => formatDate(row.date)) : []
+  );
+  return Array.from(new Set(allDates)).sort();
+};
+

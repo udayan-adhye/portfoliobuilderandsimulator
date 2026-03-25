@@ -1,0 +1,150 @@
+import React from 'react';
+import { Block } from 'baseui/block';
+import { Checkbox } from 'baseui/checkbox';
+import { Input } from 'baseui/input';
+import { BaseAssetControls } from '../common/BaseAssetControls';
+import { Asset } from '../../types/asset';
+import { HelpButton } from '../help';
+
+interface SipAssetControlsProps {
+  selectedAssets: (Asset | null)[];
+  allocations: (number | null)[];
+  onAssetSelect: (idx: number, asset: Asset | null) => void;
+  onAddAsset: () => void;
+  onRemoveAsset: (idx: number) => void;
+  onAllocationChange: (idx: number, value: number) => void;
+  rebalancingEnabled: boolean;
+  onToggleRebalancing: () => void;
+  rebalancingThreshold: number;
+  onRebalancingThresholdChange: (value: number) => void;
+  stepUpEnabled: boolean;
+  onToggleStepUp: () => void;
+  stepUpPercentage: number;
+  onStepUpPercentageChange: (value: number) => void;
+  useAssets?: boolean;
+  defaultSchemeCode?: number;
+}
+
+export const SipAssetControls: React.FC<SipAssetControlsProps> = ({
+  selectedAssets,
+  allocations,
+  onAssetSelect,
+  onAddAsset,
+  onRemoveAsset,
+  onAllocationChange,
+  rebalancingEnabled,
+  onToggleRebalancing,
+  rebalancingThreshold,
+  onRebalancingThresholdChange,
+  stepUpEnabled,
+  onToggleStepUp,
+  stepUpPercentage,
+  onStepUpPercentageChange,
+  useAssets = true,
+  defaultSchemeCode,
+}) => {
+  return (
+    <BaseAssetControls
+      selectedAssets={selectedAssets}
+      allocations={allocations}
+      onAssetSelect={onAssetSelect}
+      onAddAsset={onAddAsset}
+      onRemoveAsset={onRemoveAsset}
+      onAllocationChange={onAllocationChange}
+      useAssets={useAssets}
+      defaultSchemeCode={defaultSchemeCode}
+    >
+      {/* SIP-specific controls */}
+      <Block display="flex" alignItems="center" marginTop="scale300" gridGap="scale800">
+        <Block display="flex" alignItems="center" gridGap="scale100">
+          <Checkbox
+            checked={rebalancingEnabled}
+            onChange={onToggleRebalancing}
+            disabled={(selectedAssets?.length ?? 0) <= 1}
+          >
+            Enable Rebalancing
+          </Checkbox>
+          <HelpButton topic="sip-rebalancing" />
+        </Block>
+        <Block display="flex" alignItems="center" gridGap="scale200">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={rebalancingThreshold}
+            onChange={e => onRebalancingThresholdChange(Number((e.target as HTMLInputElement).value))}
+            disabled={!rebalancingEnabled || (selectedAssets?.length ?? 0) <= 1}
+            placeholder="Threshold"
+            size="compact"
+            overrides={{
+              After: () => (
+                <Block
+                  overrides={{
+                    Block: {
+                      style: {
+                        fontSize: '14px',
+                        color: '#71717a',
+                        paddingRight: '8px',
+                        alignSelf: 'center'
+                      }
+                    }
+                  }}
+                >
+                  %
+                </Block>
+              ),
+            }}
+            id="rebal-threshold-input"
+          />
+        </Block>
+        <Block display="flex" alignItems="center" gridGap="scale100">
+          <Checkbox
+            checked={stepUpEnabled}
+            onChange={onToggleStepUp}
+          >
+            Annual Step-up
+          </Checkbox>
+          <HelpButton topic="sip-stepup" />
+        </Block>
+        <Block display="flex" alignItems="center" gridGap="scale200">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={stepUpPercentage}
+            onChange={e => onStepUpPercentageChange(Number((e.target as HTMLInputElement).value))}
+            disabled={!stepUpEnabled}
+            placeholder="Annual increase"
+            size="compact"
+            overrides={{
+              Root: {
+                style: {
+                  width: '100px',
+                  flexShrink: 0
+                }
+              },
+              After: () => (
+                <Block
+                  overrides={{
+                    Block: {
+                      style: {
+                        fontSize: '14px',
+                        color: '#71717a',
+                        paddingRight: '8px',
+                        alignSelf: 'center'
+                      }
+                    }
+                  }}
+                >
+                  %
+                </Block>
+              ),
+            }}
+            id="stepup-input"
+          />
+        </Block>
+      </Block>
+    </BaseAssetControls>
+  );
+};
+
